@@ -3,7 +3,7 @@
 ## Explain to GitHub Copilot the goals and steps
 
 ```text
-I want to build an monafit Tracker app that will include the following:
+I want to build a monafit Tracker app that will include the following:
 
 * User authentication and profiles
 * Activity logging and tracking
@@ -376,19 +376,16 @@ class WorkoutSerializer(serializers.ModelSerializer):
 ```python
 # FILE: monafit-tracker/backend/monafit_tracker/views.py
 
-from rest_framework import viewsets, status
+from rest_framework import viewsets
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework.reverse import reverse
 from .serializers import UserSerializer, TeamSerializer, ActivitySerializer, LeaderboardSerializer, WorkoutSerializer
 from .models import User, Team, Activity, Leaderboard, Workout
 
-@api_view(['GET', 'POST'])
+@api_view(['GET'])
 def api_root(request, format=None):
-    if request.method == 'POST':
-        return Response({"message": "POST request received"}, status=status.HTTP_201_CREATED)
-
-    base_url = '[USE CODESPACE URL]'
+    base_url = 'http://[REPLACE-THIS-WITH-YOUR-CODESPACE-NAME]-8000.app.github.dev/'
     return Response({
         'users': base_url + 'api/users/?format=api',
         'teams': base_url + 'api/teams/?format=api',
@@ -629,371 +626,237 @@ class WorkoutViewSet(viewsets.ModelViewSet):
     serializer_class = WorkoutSerializer
 ```
 
-## Run the server via manage.py
+#### urls.py
 
-```bash
-python manage.py runserver
+```python
+# FILE: monafit-tracker/backend/monafit_tracker/urls.py
+
+from django.contrib import admin
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from .views import UserViewSet, TeamViewSet, ActivityViewSet, LeaderboardViewSet, WorkoutViewSet, api_root
+
+router = DefaultRouter()
+router.register(r'users', UserViewSet)
+router.register(r'teams', TeamViewSet)
+router.register(r'activities', ActivityViewSet)
+router.register(r'leaderboard', LeaderboardViewSet)
+router.register(r'workouts', WorkoutViewSet)
+
+urlpatterns = [
+    path('', api_root, name='api-root'),  # Root endpoint
+    path('admin/', admin.site.urls),  # Admin endpoint
+    path('api/', include(router.urls)),  # API endpoint
+]
 ```
 
-## Setup the frontend React app use the below package.json
+## Populate the databse with sample data
 
-```bash
-mkdir -p monafit-tracker/frontend
+```text
+Let's use manage.py to get the database setup and populated based on fields in models.py
 
-npx create-react-app monafit-tracker/frontend
-
-npm install bootstrap --prefix monafit-tracker/frontend
-
-echo "import 'bootstrap/dist/css/bootstrap.min.css';" >> src/index.js
-
-npm install react-router-dom --prefix monafit-tracker/frontend
+- Create populate_db.py as a manage.py command so it initializes and deletes previous data and recreates it
+- populate_db.py creates users, teams, activity, leaderboard, and workouts
+- users will be super hero users
+- Include steps to migrate in the monafit_tracker project
 ```
 
-### package.json
+### Commands to create the directory structure for populate_db.py
 
-```json
+```bash
+mkdir -p monafit-tracker/backend/monafit_tracker/management/commands
+touch monafit-tracker/backend/monafit_tracker/management/__init__.py
+touch monafit-tracker/backend/monafit_tracker/management/commands/__init__.py
+touch monafit-tracker/backend/monafit_tracker/management/commands/populate_db.py
+```
+
+### Sample code for populate_db.py to populate the database
+
+Mergington Physical Education sample data use for populate_db.py
+Should reside under monafit-tracker/backend/monafit_tracker/management/commands/populate_db.py
+
+```python
+# FILE: monafit-tracker/backend/monafit_tracker/management/commands/populate_db.py
+
+from django.core.management.base import BaseCommand
+from monafit_tracker.models import User, Team, Activity, Leaderboard, Workout
+from django.conf import settings
+from pymongo import MongoClient
+from datetime import timedelta
+from bson import ObjectId
+
+class Command(BaseCommand):
+    help = 'Populate the database with test data for users, teams, activity, leaderboard, and workouts'
+
+    def handle(self, *args, **kwargs):
+        # Connect to MongoDB
+        client = MongoClient(settings.DATABASES['default']['HOST'], settings.DATABASES['default']['PORT'])
+        db = client[settings.DATABASES['default']['NAME']]
+
+        # Drop existing collections
+        db.users.drop()
+        db.teams.drop()
+        db.activity.drop()
+        db.leaderboard.drop()
+        db.workouts.drop()
+
+        # Create users
+        users = [
+            User(_id=ObjectId(), username='thundergod', email='thundergod@mhigh.edu', password='thundergodpassword'),
+            User(_id=ObjectId(), username='metalgeek', email='metalgeek@mhigh.edu', password='metalgeekpassword'),
+            User(_id=ObjectId(), username='zerocool', email='zerocool@mhigh.edu', password='zerocoolpassword'),
+            User(_id=ObjectId(), username='crashoverride', email='crashoverride@hmhigh.edu', password='crashoverridepassword'),
+            User(_id=ObjectId(), username='sleeptoken', email='sleeptoken@mhigh.edu', password='sleeptokenpassword'),
+        ]
+        User.objects.bulk_create(users)
+
+        # Create teams
+        team = Team(_id=ObjectId(), name='Blue Team')
+        team = Team(_id=ObjectId(), name='Gold Team')
+        team.save()
+        for user in users:
+            team.members.add(user)
+
+        # Create activities
+        activities = [
+            Activity(_id=ObjectId(), user=users[0], activity_type='Cycling', duration=timedelta(hours=1)),
+            Activity(_id=ObjectId(), user=users[1], activity_type='Crossfit', duration=timedelta(hours=2)),
+            Activity(_id=ObjectId(), user=users[2], activity_type='Running', duration=timedelta(hours=1, minutes=30)),
+            Activity(_id=ObjectId(), user=users[3], activity_type='Strength', duration=timedelta(minutes=30)),
+            Activity(_id=ObjectId(), user=users[4], activity_type='Swimming', duration=timedelta(hours=1, minutes=15)),
+        ]
+        Activity.objects.bulk_create(activities)
+
+        # Create leaderboard entries
+        leaderboard_entries = [
+            Leaderboard(_id=ObjectId(), user=users[0], score=100),
+            Leaderboard(_id=ObjectId(), user=users[1], score=90),
+            Leaderboard(_id=ObjectId(), user=users[2], score=95),
+            Leaderboard(_id=ObjectId(), user=users[3], score=85),
+            Leaderboard(_id=ObjectId(), user=users[4], score=80),
+        ]
+        Leaderboard.objects.bulk_create(leaderboard_entries)
+
+        # Create workouts
+        workouts = [
+            Workout(_id=ObjectId(), name='Cycling Training', description='Training for a road cycling event')
+            Workout(_id=ObjectId(), name='Crossfit', description='Training for a crossfit competition'),
+            Workout(_id=ObjectId(), name='Running Training', description='Training for a marathon'),
+            Workout(_id=ObjectId(), name='Strength Training', description='Training for strength'),
+            Workout(_id=ObjectId(), name='Swimming Training', description='Training for a swimming competition'),
+        ]
+        Workout.objects.bulk_create(workouts)
+
+        self.stdout.write(self.style.SUCCESS('Successfully populated the database with test data.'))
+```
+
+### Run the following commands to migrate the database and populate it with data
+
+```bash
+python monafit-tracker/backend/manage.py monafit-tracker/backend/makemigrations
+python monafit-tracker/backend/manage.py monafit-tracker/backend/migrate
+python monafit-tracker/backendmanage.py monafit-tracker/backend/populate_db
+```
+
+## Using the Codespace endpoint to access the Django REST API endpoints
+
+```text
+Let's do the following step by step
+
+- Update #file:monafit-tracker/backend/monafit_tracker/views.py to replace the return for the rest api url endpiints with the codespace url http://[REPLACE-THIS-WITH-YOUR-CODESPACE-NAME]-8000.app.github.dev for django
+- Replace <codespace-name> with [REPLACE-THIS-WITH-YOUR-CODESPACE-NAME]
+- Run the Django server
+
+HTTP 200 OK
+Allow: GET, HEAD, OPTIONS
+Content-Type: application/json
+Vary: Accept
+
 {
-  "name": "octofit-tracker",
-  "version": "0.1.0",
-  "private": true,
-  "dependencies": {
-    "@testing-library/dom": "^9.3.1",
-    "@testing-library/jest-dom": "^6.1.5",
-    "@testing-library/react": "^14.1.2",
-    "@testing-library/user-event": "^14.5.1",
-    "bootstrap": "^5.3.2",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-router-dom": "^6.21.0",
-    "react-scripts": "5.0.1",
-    "web-vitals": "^2.1.4"
-  },
-  "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
-  },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
-  }
+    "users": "http://localhost:8000/api/users/?format=api",
+    "teams": "http://localhost:8000/api/teams/?format=api",
+    "activities": "http://localhost:8000/api/activities/?format=api",
+    "leaderboard": "http://localhost:8000/api/leaderboard/?format=api",
+    "workouts": "http://localhost:8000/api/workouts/?format=api"
+}
+
+becomes
+
+HTTP 200 OK Allow: GET, HEAD, OPTIONS Content-Type: application/json Vary: Accept
+
+{ 
+    "users": "http://<codespace-name>-8000.app.github.dev/api/users/?format=api",
+    "teams": "http://<codespace-name>-8000.app.github.dev/api/teams/?format=api",
+    "activities": "http://<codespace-name>-8000.app.github.dev/api/activities/?format=api",
+    "leaderboard": "http://<codespace-name>-8000.app.github.dev/api/leaderboard/?format=api",
+    "workouts": "http://<codespace-name>-8000.app.github.dev/api/workouts/?format=api" 
 }
 ```
 
-## monafit App components
+## Update to views.py
 
-Create the following components
+```python
+# FILE: monafit-tracker/backend/monafit_tracker/views.py
 
-- Users
-- Ativities
-- Teams
-- Leaderboard
-- Workouts
-- Login
-- Register
-- Profile
-- Dashboard
-- Settings
-- Home
+from rest_framework import viewsets
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework.reverse import reverse
+from .serializers import UserSerializer, TeamSerializer, ActivitySerializer, LeaderboardSerializer, WorkoutSerializer
+from .models import User, Team, Activity, Leaderboard, Workout
 
-Basic username password authentication is fine
+@api_view(['GET'])
+def api_root(request, format=None):
+    base_url = 'http://[REPLACE-THIS-WITH-YOUR-CODESPACE-NAME]-8000.app.github.dev/'
+    return Response({
+        'users': base_url + 'api/users/?format=api',
+        'teams': base_url + 'api/teams/?format=api',
+        'activities': base_url + 'api/activities/?format=api',
+        'leaderboard': base_url + 'api/leaderboard/?format=api',
+        'workouts': base_url + 'api/workouts/?format=api'
+    })
 
-### App.js
+class UserViewSet(viewsets.ModelViewSet):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
 
-```javascript
-import React from 'react';
-import { BrowserRouter as Router, Route, Routes, Link } from 'react-router-dom';
-import Activities from './components/Activities';
-import Leaderboard from './components/Leaderboard';
-import Teams from './components/Teams';
-import Users from './components/Users';
-import Workouts from './components/Workouts';
-import './App.css';
+class TeamViewSet(viewsets.ModelViewSet):
+    queryset = Team.objects.all()
+    serializer_class = TeamSerializer
 
-function App() {
-  return (
-    <Router>
-      <div className="container">
-        <nav className="navbar navbar-expand-lg navbar-light bg-light">
-          <div className="container-fluid">
-            <Link className="navbar-brand" to="/">OctoFit Tracker</Link>
-            <button className="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-              <span className="navbar-toggler-icon"></span>
-            </button>
-            <div className="collapse navbar-collapse" id="navbarNav">
-              <ul className="navbar-nav">
-                <li className="nav-item">
-                  <Link className="nav-link" to="/activities">Activities</Link>
-                </li>
-                <li className="nav-item">
-                  <Link className="nav-link" to="/leaderboard">Leaderboard</Link>
-                </li>
-                <li className="nav-item">
-                  <Link className="nav-link" to="/teams">Teams</Link>
-                </li>
-                <li className="nav-item">
-                  <Link className="nav-link" to="/users">Users</Link>
-                </li>
-                <li className="nav-item">
-                  <Link className="nav-link" to="/workouts">Workouts</Link>
-                </li>
-              </ul>
-            </div>
-          </div>
-        </nav>
-        <div className="mt-4">
-          <Routes>
-            <Route path="/activities" element={<Activities />} />
-            <Route path="/leaderboard" element={<Leaderboard />} />
-            <Route path="/teams" element={<Teams />} />
-            <Route path="/users" element={<Users />} />
-            <Route path="/workouts" element={<Workouts />} />
-            <Route path="/" element={<h1>Welcome to OctoFit Tracker</h1>} />
-          </Routes>
-        </div>
-      </div>
-    </Router>
-  );
-}
+class ActivityViewSet(viewsets.ModelViewSet):
+    queryset = Activity.objects.all()
+    serializer_class = ActivitySerializer
 
-export default App;
+class LeaderboardViewSet(viewsets.ModelViewSet):
+    queryset = Leaderboard.objects.all()
+    serializer_class = LeaderboardSerializer
+
+class WorkoutViewSet(viewsets.ModelViewSet):
+    queryset = Workout.objects.all()
+    serializer_class = WorkoutSerializer
 ```
 
-### index.js potential React version issues
+#### urls.py
 
-The error indicates that the ReactDOM.render function is not available in the version of React you are using. This is because React 18 introduced a new root API for rendering.
+```python
+# FILE: monafit-tracker/backend/monafit_tracker/urls.py
 
-To fix this issue, update your src/index.js file to use the new createRoot API provided by React 18. Here's the updated code:
+from django.contrib import admin
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from .views import UserViewSet, TeamViewSet, ActivityViewSet, LeaderboardViewSet, WorkoutViewSet, api_root
 
-```javascript
-import React from 'react';
-import ReactDOM from 'react-dom/client'; // Use the new root API
-import './index.css';
-import App from './App';
-import 'bootstrap/dist/css/bootstrap.min.css';
+router = DefaultRouter()
+router.register(r'users', UserViewSet)
+router.register(r'teams', TeamViewSet)
+router.register(r'activities', ActivityViewSet)
+router.register(r'leaderboard', LeaderboardViewSet)
+router.register(r'workouts', WorkoutViewSet)
 
-const root = ReactDOM.createRoot(document.getElementById('root')); // Create a root
-root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
-```
-
-### Example leaderboard component
-
-Always use the Codespace URL for the API endpoint
-
-```javascript
-import React, { useEffect, useState } from 'react';
-
-function Leaderboard() {
-  const [leaderboard, setLeaderboard] = useState([]);
-
-  useEffect(() => {
-    fetch('https://congenial-robot-pwrx4jxpp9c6vjv-8000.app.github.dev/api/leaderboard/')
-      .then(response => response.json())
-      .then(data => setLeaderboard(data))
-      .catch(error => console.error('Error fetching leaderboard:', error));
-  }, []);
-
-  return (
-    <div>
-      <h1>Leaderboard</h1>
-      <table>
-        <thead>
-          <tr>
-            <th>Username</th>
-            <th>Score</th>
-          </tr>
-        </thead>
-        <tbody>
-          {leaderboard.map(entry => (
-            <tr key={entry._id}>
-              <td>{entry.user.username}</td>
-              <td>{entry.score}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-export default Leaderboard;
-```
-
-## App.css example
-
-```css
-/* General styles */
-body {
-  font-family: 'Roboto', sans-serif;
-  background-color: #f0f8ff; /* Light blue background */
-  margin: 0;
-  padding: 0;
-}
-
-.App {
-  text-align: center;
-}
-
-/* Navigation styles */
-nav {
-  background-color: #4682b4; /* Steel blue */
-  padding: 1rem;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-}
-
-nav ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  justify-content: center;
-}
-
-nav ul li {
-  margin: 0 1rem;
-}
-
-nav ul li a {
-  color: #0f0be4; /* White text for visibility */
-  text-decoration: none;
-  font-weight: bold;
-  font-size: 1.2rem;
-  transition: color 0.3s;
-}
-
-nav ul li a:hover {
-  color: #f0f8ff; /* Light blue */
-  text-decoration: underline;
-}
-
-/* Component styles */
-h1 {
-  color: #00008b; /* Dark blue header name */
-  font-size: 2.5rem;
-  margin-bottom: 1rem;
-}
-
-/* Table styles */
-table {
-  width: 90%;
-  margin: 1rem auto;
-  border-collapse: collapse;
-  background-color: #ffffff; /* White background */
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-table th, table td {
-  border: 1px solid #ddd;
-  padding: 1rem;
-  text-align: left;
-  font-size: 1rem;
-}
-
-table th {
-  background-color: #4682b4; /* Steel blue */
-  color: white;
-  font-size: 1.2rem;
-}
-
-table tr:nth-child(even) {
-  background-color: #f0f8ff; /* Light blue */
-}
-
-table tr:hover {
-  background-color: #e0ffff; /* Light cyan */
-}
-
-ul {
-  list-style: none;
-  padding: 0;
-}
-
-ul li {
-  color: #4682b4; /* Steel blue text */
-  background-color: #fff;
-  margin: 0.5rem 0;
-  padding: 1rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  font-size: 1.1rem;
-}
-
-/* Text styles */
-.component-text {
-  color: #00008b; /* Dark blue center title */
-  font-size: 1.8rem;
-  margin-bottom: 1rem;
-}
-
-/* Button styles */
-button {
-  background-color: #4682b4; /* Steel blue */
-  color: white;
-  border: none;
-  padding: 0.75rem 1.5rem;
-  border-radius: 8px;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: background-color 0.3s;
-}
-
-button:hover {
-  background-color: #5a9bd4; /* Lighter steel blue */
-}
-
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
-}
-
-.App-header {
-  background-color: #2b2834;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
-  color: white;
-}
-
-.App-link {
-  color: #61dafb;
-}
-
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
+urlpatterns = [
+    path('', api_root, name='api-root'),  # Root endpoint
+    path('admin/', admin.site.urls),  # Admin endpoint
+    path('api/', include(router.urls)),  # API endpoint
+]
 ```
